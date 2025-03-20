@@ -36,8 +36,8 @@ def get_channel_stats(channel_id):
         "description": data["items"][0]["snippet"].get("description", "")
     }
 
-def find_similar_channels(target_channel_id):
-    """Find channels with similar descriptions"""
+def find_similar_channels(target_channel_id, keywords):
+    """Find channels with similar descriptions or titles"""
     target_data = get_channel_stats(target_channel_id)
     if not target_data:
         return []
@@ -46,13 +46,13 @@ def find_similar_channels(target_channel_id):
     search_params = {
         "part": "snippet",
         "type": "channel",
-        "relatedToChannelId": target_channel_id,
+        "q": " ".join(keywords),
         "maxResults": 20,
         "key": API_KEY
     }
     search_response = requests.get(YOUTUBE_SEARCH_URL, params=search_params).json()
     
-    # Compare descriptions
+    # Compare descriptions and titles
     channels = []
     for item in search_response.get("items", []):
         chan_id = item["snippet"]["channelId"]
@@ -80,46 +80,25 @@ def find_similar_channels(target_channel_id):
         })
     return results
 
-# ======================
-# STREAMLIT UI
-# ======================
-st.title("YouTube Research Toolkit 🔍")
-
-# Sidebar for Channel Analysis
-with st.sidebar:
-    st.header("Channel Tools")
-    channel_id = st.text_input("Enter Channel ID:")
+def get_video_stats(video_id):
+    """Fetch video statistics and channel information"""
+    params = {
+        "part": "snippet,statistics",
+        "id": video_id,
+        "key": API_KEY
+    }
+    response = requests.get(YOUTUBE_VIDEO_URL, params=params)
+    data = response.json()
     
-    if st.button("Check Monetization"):
-        if channel_id:
-            with st.spinner("Analyzing channel..."):
-                data = get_channel_stats(channel_id)
-                if data:
-                    st.subheader("💰 Monetization Status")
-                    eligible = data["subscribers"] >= 1000
-                    st.metric("Subscribers", f"{data['subscribers']:,}")
-                    st.metric("Estimated Eligibility", 
-                            "✅ Yes" if eligible else "❌ No",
-                            help="Requires 1,000+ subscribers and 4,000 watch hours")
-                else:
-                    st.error("Invalid Channel ID")
+    if not data.get("items"):
+        return None
     
-    if st.button("Find Similar Channels"):
-        if channel_id:
-            with st.spinner("Searching similar channels..."):
-                similar = find_similar_channels(channel_id)
-                if similar:
-                    st.subheader("📺 Similar Channels")
-                    for chan in similar:
-                        st.write(f"{chan['title']} (Score: {chan['score']})")
-                        st.code(f"Channel ID: {chan['channel_id']}")
+    video_data = data["items"][0]
+    channel_id = video_data["snippet"]["channelId"]
+    channel_data = get_channel_stats(channel_id)
+    
+    return {
+        "title": video_data["snippet"]["title"],
+        "channel_id": channel_id,
+        "channel_title": video_data["snippet"]["channelTitle"],
 
-# Main Area for Viral Topics Tool
-st.header("Viral Topic Finder 🔥")
-days = st.number_input("Days to Search (1-30):", 1, 30, 7)
-keywords = [...]  # Your keyword list here
-
-if st.button("Find Trending Videos"):
-    # Your existing viral topics code here
-    # Add this line to show monetization status for found videos:
-    # st.write(f"Monetization Eligible: {get_channel_stats(channel_id)['subscribers'] >= 1000}")
